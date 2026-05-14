@@ -147,6 +147,11 @@ app.get("/api/debug/users", async (_req: Request, res: Response): Promise<void> 
   res.json(users);
 });
 
+// --- Health ---
+app.get("/health", (_req: Request, res: Response): void => {
+  res.status(200).json({ status: "ok" });
+});
+
 // --- Start ---
 mongoose
   .connect(process.env.MONGO_URI ?? "")
