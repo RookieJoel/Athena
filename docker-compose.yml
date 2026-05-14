@@ -1,41 +1,55 @@
-version: "3.8"
-
 services:
-  mongo:
-    image: mongo:6
-    container_name: athena-mongo
-    restart: unless-stopped
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password123
-    ports:
-      - "27017:27017"   # VULN: MongoDB exposed to host
-    volumes:
-      - mongo-data:/data/db
-
-  backend:
-    build: ./backend
-    container_name: athena-backend
+  frontend: 
+    build: ./frontend
     restart: unless-stopped
     depends_on:
-      - mongo
+      backend:
+        condition: service_healthy
+
     environment:
-      MONGO_URI: mongodb://admin:password123@mongo:27017/athenadb?authSource=admin
-      JWT_SECRET: supersecret123
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    ports:
+      - "3001:3000"
+
+  backend: 
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+    environment:
+      MONGO_URI: ${MONGO_URI}
+      JWT_SECRET: ${JWT_SECRET}
       PORT: 4000
     ports:
       - "4000:4000"
 
-  frontend:
-    build: ./frontend
-    container_name: athena-frontend
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:4000/health" ]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+
+  mongo:
+    image: mongo:6
     restart: unless-stopped
-    depends_on:
-      - backend
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:4000
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
     ports:
-      - "3000:3000"
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 
 volumes:
-  mongo-data:
+  mongo-data: 
+    driver: local
