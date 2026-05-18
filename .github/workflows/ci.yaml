@@ -74,7 +74,9 @@ jobs:
         id: depcheck
         with:
           project: ${{ github.event.repository.name }}
-          path: 'frontend/node_modules,backend/node_modules'
+          path: |
+            frontend
+            backend
           format: 'HTML'
           out: 'reports'
           args: >
