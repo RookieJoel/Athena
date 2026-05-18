@@ -38,7 +38,7 @@ jobs:
         uses: trufflesecurity/trufflehog@main
         continue-on-error: true
         with:
-          extra_args: --fail-verified
+          extra_args: --results=verified,unknown
 
       - name: Fail on secrets found
         if: steps.trufflehog.outcome == 'failure'
@@ -64,14 +64,17 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm ci --prefix frontend
+          npm ci --prefix backend
+
 
       - name: OWASP Dependency Check
         uses: dependency-check/Dependency-Check_Action@main
         id: depcheck
         with:
           project: ${{ github.event.repository.name }}
-          path: '.'
+          path: 'frontend/node_modules,backend/node_modules'
           format: 'HTML'
           out: 'reports'
           args: >
