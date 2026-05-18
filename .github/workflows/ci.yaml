@@ -82,6 +82,10 @@ jobs:
           args: >
             --failOnCVSS 7
             --enableRetired
+            --exclude **/node_modules/**
+            --exclude **/.next/**
+            --exclude **/dist/**
+            --exclude **/build/**
 
       - name: Upload report
         if: always()
