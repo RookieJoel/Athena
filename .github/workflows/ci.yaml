@@ -62,14 +62,8 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
-
-      # Step 5: actually blocks pipeline on quality gate failure — was missing
-      - name: SonarQube Quality Gate Check
-        uses: SonarSource/sonarqube-quality-gate-action@d304d050d930b02a896b0f85935344f023928496 # v1.1.0
-        timeout-minutes: 5
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: https://sonarcloud.io
+        with:
+          args: -Dsonar.qualitygate.wait=true
 
   codeql-scan:
     name: SAST (CodeQL)
@@ -78,6 +72,7 @@ jobs:
     permissions:
       contents: read
       security-events: write # upload SARIF to Security tab
+      actions: read # required by codeql analyze to fetch workflow run info
     strategy:
       matrix:
         language: [javascript] # covers both frontend (React) and backend (Node)
@@ -106,6 +101,7 @@ jobs:
     permissions:
       contents: read
       security-events: write # Step 7: upload SARIF to Security tab
+      actions: read # required by upload-sarif to fetch workflow run info
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -280,6 +276,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      actions: read # required by upload-sarif to fetch workflow run info
     strategy:
       matrix:
         service: [frontend, backend]
