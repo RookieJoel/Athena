@@ -21,7 +21,7 @@ FROM node:26-alpine AS prod
 WORKDIR /app
 ENV NODE_ENV=production
 
-RUN apk add --no-cache curl && addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN apk upgrade --no-cache && apk add --no-cache curl && addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static

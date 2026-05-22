@@ -28,7 +28,7 @@ FROM node:26-alpine AS prod
 WORKDIR /app
 ENV NODE_ENV=production
 
-RUN apk add --no-cache curl && addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN apk upgrade --no-cache && apk add --no-cache curl && addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist

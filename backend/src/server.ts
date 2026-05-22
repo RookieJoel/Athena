@@ -4,12 +4,33 @@ import mongoose, { Schema, Document, model } from "mongoose";
 import cors from "cors";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import rateLimit from "express-rate-limit";
 
 const app = express();
 
-// VULN: wildcard CORS — accepts requests from any origin
-app.use(cors());
-app.use(express.json());
+const allowedOrigins = (process.env.CORS_ORIGINS ?? "").split(",").filter(Boolean);
+app.use(
+  cors({
+    origin: allowedOrigins.length > 0 ? allowedOrigins : false,
+    credentials: true,
+  })
+);
+app.use(express.json({ limit: "10kb" }));
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(limiter);
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // --- Types ---
 interface IUser extends Document {
@@ -20,7 +41,7 @@ interface IUser extends Document {
 interface INote extends Document {
   userId: string;
   title: string;
-  content: string; // VULN: raw HTML stored, no sanitization → stored XSS
+  content: string;
   createdAt: Date;
 }
 
@@ -35,21 +56,23 @@ interface AuthRequest extends Request {
 
 // --- Models ---
 const userSchema = new Schema<IUser>({
-  username: { type: String, required: true },
+  username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
 });
 const User = model<IUser>("User", userSchema);
 
 const noteSchema = new Schema<INote>({
-  userId: { type: String, required: true },
+  userId: { type: String, required: true, index: true },
   title: { type: String, required: true },
   content: { type: String, default: "" },
   createdAt: { type: Date, default: Date.now },
 });
 const Note = model<INote>("Note", noteSchema);
 
-// VULN: hardcoded fallback secret
-const JWT_SECRET = process.env.JWT_SECRET ?? "secret";
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET environment variable is required");
+}
 
 // --- Middleware ---
 const auth = (req: AuthRequest, res: Response, next: NextFunction): void => {
@@ -67,35 +90,47 @@ const auth = (req: AuthRequest, res: Response, next: NextFunction): void => {
 };
 
 // --- Auth Routes ---
-app.post("/api/register", async (req: Request, res: Response): Promise<void> => {
+app.post("/api/register", authLimiter, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { username, password } = req.body as { username: string; password: string };
+    const { username, password } = req.body as { username: unknown; password: unknown };
+
+    if (typeof username !== "string" || typeof password !== "string") {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+
+    if (username.length < 3 || username.length > 30 || password.length < 8) {
+      res.status(400).json({ error: "Username must be 3-30 chars, password at least 8 chars" });
+      return;
+    }
+
     const hashed = await bcrypt.hash(password, 10);
     const user = await User.create({ username, password: hashed });
     res.json({ message: "Registered", id: user._id });
-  } catch (err) {
-    const e = err as Error;
-    // VULN: leaks full stack trace to client
-    res.status(500).json({ error: e.message, stack: e.stack });
+  } catch {
+    res.status(500).json({ error: "Registration failed" });
   }
 });
 
-app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
+app.post("/api/login", authLimiter, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { username, password } = req.body as { username: unknown; password: string };
+    const { username, password } = req.body as { username: unknown; password: unknown };
 
-    // VULN: NoSQL injection — no type check on username
-    // attacker sends: { "username": { "$gt": "" }, "password": "x" }
+    if (typeof username !== "string" || typeof password !== "string") {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+
     const user = await User.findOne({ username });
 
     if (!user) {
-      res.status(401).json({ error: "User not found" });
+      res.status(401).json({ error: "Invalid credentials" });
       return;
     }
 
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
-      res.status(401).json({ error: "Wrong password" });
+      res.status(401).json({ error: "Invalid credentials" });
       return;
     }
 
@@ -105,46 +140,53 @@ app.post("/api/login", async (req: Request, res: Response): Promise<void> => {
       { expiresIn: "7d" }
     );
     res.json({ token });
-  } catch (err) {
-    const e = err as Error;
-    // VULN: leaks stack trace
-    res.status(500).json({ error: e.message, stack: e.stack });
+  } catch {
+    res.status(500).json({ error: "Login failed" });
   }
 });
 
 // --- Notes Routes ---
 app.get("/api/notes", auth, async (req: AuthRequest, res: Response): Promise<void> => {
-  const notes = await Note.find({ userId: req.user!.id });
-  res.json(notes);
+  try {
+    const notes = await Note.find({ userId: req.user!.id });
+    res.json(notes);
+  } catch {
+    res.status(500).json({ error: "Failed to fetch notes" });
+  }
 });
 
 app.post("/api/notes", auth, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { title, content } = req.body as { title: string; content: string };
-    // VULN: content stored as raw HTML
+    const { title, content } = req.body as { title: unknown; content: unknown };
+
+    if (typeof title !== "string" || typeof content !== "string") {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+
+    if (title.length > 200 || content.length > 10000) {
+      res.status(400).json({ error: "Title max 200 chars, content max 10000 chars" });
+      return;
+    }
+
     const note = await Note.create({ userId: req.user!.id, title, content });
     res.json(note);
-  } catch (err) {
-    const e = err as Error;
-    res.status(500).json({ error: e.message, stack: e.stack });
+  } catch {
+    res.status(500).json({ error: "Failed to create note" });
   }
 });
 
 app.delete("/api/notes/:id", auth, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    // VULN: no ownership check — any authed user can delete any note
-    await Note.findByIdAndDelete(req.params.id);
+    const note = await Note.findOneAndDelete({ _id: req.params.id, userId: req.user!.id });
+    if (!note) {
+      res.status(404).json({ error: "Note not found" });
+      return;
+    }
     res.json({ message: "Deleted" });
-  } catch (err) {
-    const e = err as Error;
-    res.status(500).json({ error: e.message, stack: e.stack });
+  } catch {
+    res.status(500).json({ error: "Failed to delete note" });
   }
-});
-
-// VULN: unauthenticated debug endpoint
-app.get("/api/debug/users", async (_req: Request, res: Response): Promise<void> => {
-  const users = await User.find({}, "username _id");
-  res.json(users);
 });
 
 // --- Health ---
