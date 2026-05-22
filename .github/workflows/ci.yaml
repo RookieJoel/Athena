@@ -246,7 +246,7 @@ jobs:
           severity: LOW,MEDIUM,HIGH,CRITICAL
           exit-code: '0'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
 
       # SARIF for GitHub Security tab — exit-code 1 blocks push on HIGH/CRITICAL
       - name: Trivy scan (SARIF + gate)
