@@ -61,6 +61,7 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@bfd4e558cda28cda6b5defafb9232d191be8c203 # v4.2.1
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
 
       - name: SonarQube Quality Gate
         uses: SonarSource/sonarqube-quality-gate-action@d304d050d930b02a896b0f85935344f023928496 # v1.1.0
