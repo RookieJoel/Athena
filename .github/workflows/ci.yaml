@@ -298,6 +298,7 @@ jobs:
           output: trivy-results.sarif
           severity: HIGH,CRITICAL
           exit-code: '1'
+          limit-severities-for-sarif: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
