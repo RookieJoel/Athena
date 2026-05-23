@@ -185,7 +185,7 @@ app.delete("/api/notes/:id", auth, async (req: AuthRequest, res: Response): Prom
     }
     res.json({ message: "Deleted" });
   } catch {
-    res.status(500).json({ error: "Failed to delete note" });
+    res.status(500).json({ error: "Failed to delete note" }); 
   }
 });
 
