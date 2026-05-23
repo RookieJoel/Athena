@@ -276,8 +276,7 @@ jobs:
           push: false
           load: true
           tags: ${{ env.IMAGE_NAME }}-${{ matrix.service }}:scan
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          no-cache: true
 
       # Human-readable table printed directly in the Actions log (all severities for visibility)
       - name: Trivy scan (table)
